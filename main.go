@@ -74,16 +74,44 @@ func main() {
 }
 
 func checkDuplication(v cue.Value) bool {
-	hasConcret := false
+	var defs []cue.Value
+
+	// To capture precision when disjuct int with *4, there is something wierd happens
 	ops, bval := v.Eval().Expr()
 	if ops == cue.OrOp {
 		for _, val := range bval {
-			if val.IsConcrete() {
-				if hasConcret {
-					return true
-				} else {
-					hasConcret = true
+			v, ok := val.Default()
+			fmt.Printf(".........the default value is %v \n", v)
+			if ok && v.IsConcrete() {
+				defs = append(defs, v)
+			}
+		}
+	}
+
+	// To cover other cases
+	ops, vvals := v.Expr()
+	if ops == cue.OrOp {
+		for _, vval := range vvals {
+			if inst, path := vval.Reference(); len(path) > 0 {
+				if def, ok := inst.Lookup(path...).Default(); ok {
+					defs = append(defs, def)
 				}
+			}
+		}
+	}
+
+	def, ok := v.Default()
+	if ok {
+		defs = append(defs, def)
+		op, dvals := def.Expr()
+		if len(dvals) > 1 && op == cue.OrOp {
+			return true
+		}
+	}
+	if len(defs) >= 1 {
+		for _, def := range defs[1:] {
+			if !defs[0].Equals(def) {
+				return true
 			}
 		}
 	}
